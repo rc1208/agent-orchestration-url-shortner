@@ -9,8 +9,9 @@ offline; `openai` mode uses structured Responses API outputs.
 Python 3.11 or newer is required.
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
+conda activate myenv
+python -m venv .venv-for-agent
+source .venv-for-agent/bin/activate
 python -m pip install -e '.[dev]'
 cp .env.example .env
 pytest -q
