@@ -23,6 +23,7 @@ dev = [
   "httpx==0.28.1",
   "pytest==8.4.1",
   "pytest-asyncio==1.1.0",
+  "pytest-cov==6.2.1",
   "ruff==0.12.11",
   "mypy==1.17.1",
 ]
@@ -35,6 +36,22 @@ include = ["agentic_url_shortener*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "unit: fast isolated domain, provider, policy, or formatting tests",
+  "functional: API or persistent end-to-end workflow tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["agentic_url_shortener"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+  "if __name__ == .__main__.:",
+  "@abstractmethod",
+]
 
 [tool.ruff]
 line-length = 100
@@ -44,4 +61,3 @@ python_version = "3.11"
 plugins = ["pydantic.mypy"]
 check_untyped_defs = true
 ignore_missing_imports = true
-

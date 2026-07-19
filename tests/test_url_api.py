@@ -1,6 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
+import pytest
+
+
+pytestmark = pytest.mark.functional
 
 
 def test_create_resolve_and_analyze_url(client: TestClient) -> None:

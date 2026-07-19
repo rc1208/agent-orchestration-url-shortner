@@ -1,4 +1,8 @@
 from fastapi.testclient import TestClient
+import pytest
+
+
+pytestmark = pytest.mark.functional
 
 
 def test_workflow_api_approval_flow(client: TestClient) -> None:
