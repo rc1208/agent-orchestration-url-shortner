@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+import logging
 from typing import Literal, TypeVar
 
 from pydantic import BaseModel, Field
+
+from .logging import log_event
 
 
 class RequirementAnalysis(BaseModel):
@@ -166,11 +169,15 @@ class FallbackProvider(AgentProvider):
     def __init__(self, primary: AgentProvider, fallback: AgentProvider | None = None) -> None:
         self.primary = primary
         self.fallback = fallback or MockProvider()
+        self.logger = logging.getLogger("agentic_url_shortener.provider")
 
     def _call(self, method: str, *args):
         try:
             return getattr(self.primary, method)(*args)
-        except Exception:
+        except Exception as error:
+            log_event(self.logger, "provider_fallback", level=logging.WARNING,
+                      details={"method": method, "provider": self.primary.name,
+                               "error_type": type(error).__name__, "reason": str(error)})
             return getattr(self.fallback, method)(*args)
 
     def analyze_requirement(self, requirement: str, scenario: str) -> RequirementAnalysis:

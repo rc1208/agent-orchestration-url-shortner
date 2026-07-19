@@ -1,4 +1,5 @@
 import json
+import logging
 import operator
 import shutil
 import sqlite3
@@ -14,6 +15,7 @@ from langgraph.types import Command, interrupt
 from .audit import AuditRepository
 from .config import Settings
 from .database import Database
+from .logging import log_event
 from .policy import PolicyViolation, WorkspacePolicy
 from .providers import AgentProvider, FallbackProvider, MockProvider, OpenAIProvider
 
@@ -57,6 +59,7 @@ class WorkflowService:
         self.settings = settings
         self.database = database
         self.audit = AuditRepository(database)
+        self.logger = logging.getLogger("agentic_url_shortener.workflow")
         self.policy = WorkspacePolicy()
         self.provider: AgentProvider = (
             FallbackProvider(OpenAIProvider(settings.openai_model or ""))
@@ -73,6 +76,9 @@ class WorkflowService:
     def _event(self, state: WorkflowState, event: str, node: str, rationale: str = "", data: dict | None = None) -> None:
         self.audit.record(state["run_id"], event, node=node,
                           revision=state.get("requirement_revision", 1), rationale=rationale, data=data)
+        log_event(self.logger, event, run_id=state["run_id"], node=node,
+                  details={"revision": state.get("requirement_revision", 1),
+                           "rationale": rationale, **(data or {})})
 
     def _build_graph(self):
         graph = StateGraph(WorkflowState)
@@ -144,6 +150,8 @@ class WorkflowService:
             actor = answer.get("actor", "human") if isinstance(answer, dict) else "human"
             self.audit.record(state["run_id"], "approval_decision", node="code_approval",
                               actor=actor, revision=state["requirement_revision"], data={"approved": approved})
+            log_event(self.logger, "approval_decision", run_id=state["run_id"], node="code_approval",
+                      details={"action": "apply_code", "approved": approved, "actor": actor})
             return {"approvals": [{"action": "apply_code", "approved": approved, "actor": actor}],
                     "status": "approved_for_apply" if approved else "safe_stopped",
                     "pending_action": None, "completed_at": None if approved else now_iso()}
@@ -230,6 +238,8 @@ class WorkflowService:
             actor = answer.get("actor", "human") if isinstance(answer, dict) else "human"
             self.audit.record(state["run_id"], "approval_decision", node="release_approval",
                               actor=actor, revision=state["requirement_revision"], data={"approved": approved})
+            log_event(self.logger, "approval_decision", run_id=state["run_id"], node="release_approval",
+                      details={"action": "release", "approved": approved, "actor": actor})
             return {"approvals": [{"action": "release", "approved": approved, "actor": actor}],
                     "status": "completed" if approved else "safe_stopped", "pending_action": None,
                     "completed_at": now_iso()}
@@ -289,6 +299,7 @@ class WorkflowService:
         }
         self._insert_run(state)
         self.audit.record(run_id, "run_started", actor="human", data={"scenario": scenario})
+        log_event(self.logger, "run_started", run_id=run_id, node="start", details={"scenario": scenario})
         result = self.graph.invoke(state, config={"configurable": {"thread_id": run_id}})
         return self._save_result(run_id, result)
 
@@ -310,6 +321,7 @@ class WorkflowService:
         state = self.get(run_id)
         state.update(status="cancelled", pending_action=None, completed_at=now_iso())
         self.audit.record(run_id, "run_cancelled", actor="human", revision=state["requirement_revision"])
+        log_event(self.logger, "run_cancelled", run_id=run_id, node="cancel")
         self._update_run(state)
         return state
 

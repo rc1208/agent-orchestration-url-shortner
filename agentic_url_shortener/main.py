@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import logging
+import uuid
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -6,6 +8,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from .config import Settings
 from .database import Database
+from .logging import configure_logging, log_event
 from .schemas import (
     AnalyticsResponse,
     ApprovalRequest,
@@ -28,6 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_: FastAPI):
         nonlocal workflow
         database.initialize()
+        configure_logging()
         config.workspace_root.mkdir(parents=True, exist_ok=True)
         workflow = WorkflowService(config, database)
         app.state.workflow = workflow
@@ -37,9 +41,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = config
     app.state.database = database
     app.state.url_service = service
+    logger = logging.getLogger("agentic_url_shortener.api")
+
+    def request_correlation_id(request: Request) -> str | None:
+        return getattr(request.state, "correlation_id", None)
+
+    @app.middleware("http")
+    async def correlation_context(request: Request, call_next):
+        correlation_id = request.headers.get("x-correlation-id") or str(uuid.uuid4())
+        request.state.correlation_id = correlation_id
+        response = await call_next(request)
+        response.headers["x-correlation-id"] = correlation_id
+        return response
 
     @app.exception_handler(UrlError)
     async def url_error(_: Request, error: UrlError) -> JSONResponse:
+        log_event(logger, "api_error", correlation_id=request_correlation_id(_),
+                  level=logging.WARNING, details={"code": error.code, "status": error.status_code})
         return JSONResponse(
             status_code=error.status_code,
             content={"error": {"code": error.code, "message": str(error)}},
@@ -47,6 +65,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, error: RequestValidationError) -> JSONResponse:
+        log_event(logger, "api_validation_error",
+                  correlation_id=request_correlation_id(_),
+                  level=logging.WARNING, details={"error_count": len(error.errors())})
         return JSONResponse(
             status_code=422,
             content={"error": {"code": "VALIDATION_ERROR", "message": "Invalid request", "details": error.errors()}},
@@ -54,6 +75,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(KeyError)
     async def not_found(_: Request, error: KeyError) -> JSONResponse:
+        log_event(logger, "run_not_found", correlation_id=request_correlation_id(_),
+                  level=logging.WARNING)
         return JSONResponse(
             status_code=404,
             content={"error": {"code": "RUN_NOT_FOUND", "message": str(error)}},
@@ -61,6 +84,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(WorkflowStateError)
     async def invalid_run_state(_: Request, error: WorkflowStateError) -> JSONResponse:
+        log_event(logger, "invalid_run_state",
+                  correlation_id=request_correlation_id(_),
+                  level=logging.WARNING, details={"reason": str(error)})
         return JSONResponse(
             status_code=409,
             content={"error": {"code": "INVALID_RUN_STATE", "message": str(error)}},
@@ -68,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(ValueError)
     async def bad_request(_: Request, error: ValueError) -> JSONResponse:
+        log_event(logger, "bad_request", correlation_id=request_correlation_id(_),
+                  level=logging.WARNING, details={"reason": str(error)})
         return JSONResponse(
             status_code=400,
             content={"error": {"code": "BAD_REQUEST", "message": str(error)}},
