@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "environment": "deterministic_mock",
+  "checks": [
+    {
+      "name": "required_agent_stages",
+      "passed": true,
+      "evidence": "observed=['architecture', 'implementation', 'normalize', 'planning', 'qa_planning', 'risk_security']"
+    },
+    {
+      "name": "qa_category_coverage",
+      "passed": true,
+      "evidence": "categories=['failure_path', 'functional', 'security', 'unit']"
+    },
+    {
+      "name": "approval_boundary",
+      "passed": true,
+      "evidence": "release approval rejected before apply-code approval"
+    },
+    {
+      "name": "brownfield_code_evidence",
+      "passed": true,
+      "evidence": "impact cites app/service.py:UrlService"
+    },
+    {
+      "name": "ambiguity_replanning",
+      "passed": true,
+      "evidence": "clarification interrupt produced requirement revision 2"
+    },
+    {
+      "name": "rejection_safe_stop",
+      "passed": true,
+      "evidence": "status=safe_stopped"
+    },
+    {
+      "name": "bounded_retry_rollback",
+      "passed": true,
+      "evidence": "attempts=3; restored=True"
+    },
+    {
+      "name": "audit_lineage",
+      "passed": true,
+      "evidence": "validated_fields_for=8 events"
+    },
+    {
+      "name": "mock_determinism",
+      "passed": true,
+      "evidence": "normalized state signatures match across repeated runs"
+    }
+  ],
+  "passed": 9,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "within_30_second_budget": true
+}

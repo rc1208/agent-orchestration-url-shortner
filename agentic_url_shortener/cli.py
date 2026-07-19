@@ -6,6 +6,7 @@ import typer
 from .config import Settings
 from .database import Database
 from .workflow import WorkflowService
+from .evaluation import AgenticEvaluationSuite
 
 
 app = typer.Typer(help="Operate the governed agentic SDLC workflow.")
@@ -69,3 +70,12 @@ def demo(
     if scenario not in SCENARIOS:
         raise typer.BadParameter("Choose greenfield, brownfield, or ambiguous")
     show(service().start(SCENARIOS[scenario], scenario))  # type: ignore[arg-type]
+
+
+@app.command()
+def evaluate(output: str = "eval-results.json") -> None:
+    """Run deterministic governance evaluations and write stable JSON evidence."""
+    report = AgenticEvaluationSuite().run_and_write(__import__("pathlib").Path(output))
+    show(report.model_dump())
+    if report.failed:
+        raise typer.Exit(code=1)
