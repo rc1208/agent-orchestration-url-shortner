@@ -75,5 +75,17 @@ def test_retry_exhaustion_requires_and_performs_rollback(settings: Settings) -> 
     run = service.approve(run["run_id"], "rollback", True, "reviewer")
     assert run["status"] == "safe_stopped"
     assert run["rollback_state"] == "restored"
-    assert (Path(run["workspace_path"]) / "README.md").exists()
-    assert not (Path(run["workspace_path"]) / "solution.py").exists()
+    assert (Path(run["workspace_path"]) / "app/service.py").exists()
+    assert not (Path(run["workspace_path"]) / "app/analytics.py").exists()
+
+
+def test_brownfield_analysis_cites_real_code_and_flows_downstream(settings: Settings) -> None:
+    service = build_service(settings)
+    run = service.start("Add expiration and analytics", "brownfield")
+
+    impact = run["impact_analysis"]
+    assert "app/service.py" in impact["impacted_files"]
+    assert any(item["symbol"] == "UrlService" for item in impact["evidence"])
+    assert any("app/service.py" in case["requirement_reference"]
+               for case in run["qa_plan"]["recommendations"])
+    assert run["artifacts"][0]["path"] == "app/analytics.py"

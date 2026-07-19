@@ -124,6 +124,16 @@ class MockProvider(AgentProvider):
         ])
 
     def implement(self, requirement: str, scenario: str, attempt: int) -> ImplementationProposal:
+        if scenario == "brownfield":
+            analytics = '''"""Expiration and analytics extension for the inspected service."""\n\nfrom dataclasses import dataclass\nfrom datetime import UTC, datetime\n\n\n@dataclass\nclass LinkAnalytics:\n    expires_at: datetime | None = None\n    redirect_count: int = 0\n\n    def record_redirect(self) -> None:\n        if self.expires_at and self.expires_at <= datetime.now(UTC):\n            raise ValueError("Link expired")\n        self.redirect_count += 1\n'''
+            tests = '''from app.analytics import LinkAnalytics\n\n\ndef test_redirect_count_increments():\n    analytics = LinkAnalytics()\n    analytics.record_redirect()\n    assert analytics.redirect_count == 1\n'''
+            if "[fail-tests]" in requirement:
+                tests += "\n\ndef test_injected_failure():\n    assert False, 'deterministic failure injection'\n"
+            return ImplementationProposal(
+                summary=f"Brownfield extension based on app/service.py, app/repository.py, and API evidence (attempt {attempt})",
+                artifacts=[Artifact(path="app/analytics.py", content=analytics),
+                           Artifact(path="tests/test_analytics.py", content=tests)],
+            )
         safer = "safe" in requirement.lower() or "expir" in requirement.lower()
         solution = '''"""Generated, reviewable URL-shortener domain artifact."""\n\nimport hashlib\nimport re\n\n\ndef shorten(url: str, alias: str | None = None) -> str:\n    if not url.startswith(("http://", "https://")):\n        raise ValueError("Only HTTP(S) URLs are allowed")\n    if alias is not None:\n        if not re.fullmatch(r"[A-Za-z0-9_-]{3,32}", alias):\n            raise ValueError("Unsafe alias")\n        return alias\n    return hashlib.sha256(url.encode()).hexdigest()[:7]\n'''
         if safer:

@@ -13,6 +13,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from .audit import AuditRepository
+from .codebase_analysis import PythonCodebaseAnalyzer
 from .config import Settings
 from .database import Database
 from .logging import log_event
@@ -31,6 +32,7 @@ class WorkflowState(TypedDict, total=False):
     decisions: Annotated[list[dict], operator.add]
     tasks: list[dict]
     qa_plan: dict
+    impact_analysis: dict | None
     architecture: dict
     risks: list[str]
     controls: list[str]
@@ -62,6 +64,7 @@ class WorkflowService:
         self.audit = AuditRepository(database)
         self.logger = logging.getLogger("agentic_url_shortener.workflow")
         self.policy = WorkspacePolicy()
+        self.codebase_analyzer = PythonCodebaseAnalyzer()
         self.provider: AgentProvider = (
             FallbackProvider(OpenAIProvider(settings.openai_model or ""))
             if settings.provider == "openai"
@@ -98,7 +101,34 @@ class WorkflowService:
 
         def ambiguity_route(state: WorkflowState) -> list[str]:
             decision = state["decisions"][-1]
+            if state["scenario"] == "brownfield":
+                return ["codebase_analysis"]
             return ["clarify"] if decision.get("score", 0) >= 0.7 else ["architecture", "risks"]
+
+        def contextual_requirement(state: WorkflowState) -> str:
+            impact = state.get("impact_analysis")
+            if not impact:
+                return state["normalized_requirement"]
+            evidence = {
+                "impacted_files": impact["impacted_files"],
+                "impacted_symbols": impact["impacted_symbols"],
+                "routes": impact["routes"],
+                "data_flows": impact["data_flows"],
+                "test_impact": impact["test_impact"],
+            }
+            return f'{state["normalized_requirement"]}\nCodebase evidence: {json.dumps(evidence)}'
+
+        def analyze_codebase(state: WorkflowState) -> dict:
+            result = self.codebase_analyzer.analyze(
+                Path(state["workspace_path"]), state["normalized_requirement"]
+            )
+            self._event(state, "codebase_impact_analyzed", "codebase_analysis", data={
+                "module_count": len(result.modules), "route_count": len(result.routes),
+                "impacted_files": result.impacted_files,
+            })
+            return {"impact_analysis": result.model_dump(),
+                    "decisions": [{"kind": "brownfield_impact",
+                                   "evidence": [item.model_dump() for item in result.evidence]}]}
 
         def clarify(state: WorkflowState) -> dict:
             answer = interrupt({"action": "clarify", "questions": state["decisions"][-1]["questions"]})
@@ -111,19 +141,19 @@ class WorkflowService:
                                    "invalidated": ["architecture", "plan", "implementation"]}]}
 
         def architecture(state: WorkflowState) -> dict:
-            output = self.provider.architecture(state["normalized_requirement"])
+            output = self.provider.architecture(contextual_requirement(state))
             self._event(state, "node_completed", "architecture")
             return {"architecture": output.model_dump(),
                     "decisions": [{"kind": "architecture", "items": output.decisions}]}
 
         def risks(state: WorkflowState) -> dict:
-            output = self.provider.risks(state["normalized_requirement"])
+            output = self.provider.risks(contextual_requirement(state))
             self._event(state, "node_completed", "risk_security")
             return {"risks": output.risks, "controls": output.controls,
                     "validation_results": [{"gate": "security_design", "passed": True}]}
 
         def plan(state: WorkflowState) -> dict:
-            output = self.provider.plan(state["normalized_requirement"])
+            output = self.provider.plan(contextual_requirement(state))
             task_ids = {task.task_id for task in output.tasks}
             valid = all(set(task.dependencies) <= task_ids for task in output.tasks)
             self._event(state, "gate_evaluated", "planning", data={"passed": valid})
@@ -135,7 +165,7 @@ class WorkflowService:
         def implement(state: WorkflowState) -> dict:
             attempt = state.get("attempts", {}).get("implementation", 0) + 1
             proposal = self.provider.implement(
-                state["normalized_requirement"], state["scenario"], attempt
+                contextual_requirement(state), state["scenario"], attempt
             )
             root = Path(state["workspace_path"])
             self.policy.validate_artifacts(root, proposal.artifacts)
@@ -149,7 +179,7 @@ class WorkflowService:
             from .providers import TaskPlan
 
             task_plan = TaskPlan.model_validate({"tasks": state["tasks"]})
-            plan_output = self.provider.qa_plan(state["normalized_requirement"], task_plan)
+            plan_output = self.provider.qa_plan(contextual_requirement(state), task_plan)
             self._event(state, "qa_plan_generated", "qa_planning", data={
                 "provider": self.provider.name,
                 "case_count": len(plan_output.recommendations),
@@ -265,7 +295,8 @@ class WorkflowService:
             return {"status": "safe_stopped", "pending_action": None,
                     "completed_at": state.get("completed_at") or now_iso()}
 
-        nodes = {"normalize": normalize, "clarify": clarify, "architecture": architecture,
+        nodes = {"normalize": normalize, "clarify": clarify,
+                 "codebase_analysis": analyze_codebase, "architecture": architecture,
                  "risks": risks, "plan": plan, "implement": implement,
                  "qa_planning": qa_planning,
                  "code_approval": code_approval, "apply": apply_code, "tests": run_tests,
@@ -276,6 +307,8 @@ class WorkflowService:
             graph.add_node(name, node)
         graph.add_edge(START, "normalize")
         graph.add_conditional_edges("normalize", ambiguity_route)
+        graph.add_edge("codebase_analysis", "architecture")
+        graph.add_edge("codebase_analysis", "risks")
         graph.add_edge("clarify", "architecture")
         graph.add_edge("clarify", "risks")
         graph.add_edge("architecture", "plan")
@@ -303,13 +336,16 @@ class WorkflowService:
     def start(self, requirement: str, scenario: Literal["greenfield", "brownfield", "ambiguous"]) -> dict:
         run_id = str(uuid.uuid4())
         root = (self.settings.workspace_root / run_id).resolve()
-        root.mkdir(parents=True, exist_ok=True)
         if scenario == "brownfield":
-            (root / "README.md").write_text("# Seed URL Service\n", encoding="utf-8")
+            fixture = Path(__file__).parents[1] / "fixtures" / "brownfield_url_service"
+            shutil.copytree(fixture, root)
+        else:
+            root.mkdir(parents=True, exist_ok=True)
         state: WorkflowState = {
             "run_id": run_id, "thread_id": run_id, "scenario": scenario,
             "requirement": requirement[:12000], "requirement_revision": 1,
             "assumptions": [], "decisions": [], "tasks": [], "qa_plan": {},
+            "impact_analysis": None,
             "risks": [], "controls": [],
             "artifacts": [], "approvals": [], "attempts": {}, "test_results": [],
             "validation_results": [], "rollback_state": "not_required", "status": "created",
