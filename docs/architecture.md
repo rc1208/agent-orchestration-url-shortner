@@ -8,6 +8,7 @@ flowchart LR
   API --> Graph["LangGraph orchestrator"]
   API --> URL["URL domain service"]
   Graph --> Provider["Mock / OpenAI provider"]
+  Provider --> Agents["Requirements / Design / Development / QA agents"]
   Graph --> Policy["Workspace policy"]
   Graph --> Checkpoints["SQLite checkpoints"]
   Graph --> Audit["Audit events + metrics"]
@@ -28,7 +29,8 @@ flowchart TD
   A -->|no| AR[Architecture and risk analysis]
   C --> AR
   AR --> P[Dependency plan]
-  P --> G[Implementation proposal]
+  P --> Q[QA agent test plan]
+  Q --> G[Development agent proposal]
   G --> H[Code approval interrupt]
   H -->|reject| S[Safe stop]
   H -->|approve| W[Snapshot and apply]
@@ -41,9 +43,13 @@ flowchart TD
   L --> E[Complete]
 ```
 
-State contains requirement revisions, decisions, task dependencies, artifacts, approvals,
-attempts, validation results, rollback state, and terminal status. Audit rows preserve who did
+State contains requirement revisions, decisions, task dependencies, QA recommendations,
+artifacts, approvals, attempts, validation results, rollback state, and terminal status. Audit rows preserve who did
 what, when, why, and against which requirement revision.
+
+Operational logs and audit records serve different purposes. Newline-delimited JSON logs support
+runtime diagnosis and correlation; append-only SQLite audit events preserve governance decisions
+and lineage. Audit events additionally record actor and requirement revision.
 
 ## Safety and reliability
 
@@ -56,4 +62,3 @@ what, when, why, and against which requirement revision.
   restores the true pre-change state.
 - Metrics expose success rate, retries, rollback, safe stops, MTTR placeholder, and p50/p95/p99
   end-to-end latency without high-cardinality labels.
-

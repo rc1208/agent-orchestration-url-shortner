@@ -4,6 +4,9 @@ A runnable prototype that combines a production-shaped URL shortener with a
 governed, stateful agentic SDLC workflow. The default `mock` provider is deterministic and
 offline; `openai` mode uses structured Responses API outputs.
 
+Requirements, Design, Planning, Development, QA, and Review agents produce typed artifacts;
+deterministic tests and policies plus human approvals control whether changes advance.
+
 ## Quick start
 
 Python 3.11 or newer is required.
@@ -70,6 +73,18 @@ ruff check .
 mypy agentic_url_shortener
 ```
 
-See [architecture](docs/architecture.md), [decisions](docs/decisions.md),
-[engineering summary](docs/engineering-summary.md), and [demo runbook](docs/demo-runbook.md).
+Coverage evidence is separated by test level:
 
+```bash
+pytest -m unit --cov=agentic_url_shortener --cov-branch --cov-report=term-missing
+pytest -m functional --cov=agentic_url_shortener --cov-branch --cov-report=term-missing
+pytest --cov=agentic_url_shortener --cov-branch --cov-report=term-missing --cov-fail-under=85
+```
+
+Runtime diagnostics are emitted as redacted newline-delimited JSON with correlation and run IDs.
+SQLite audit events separately preserve actors, approvals, rationale, and requirement revisions.
+
+See [architecture](docs/architecture.md), [decisions](docs/decisions.md),
+[AI-assisted SDLC evidence](docs/ai-assisted-sdlc.md),
+[test traceability](docs/test-traceability.md), [engineering summary](docs/engineering-summary.md),
+and [demo runbook](docs/demo-runbook.md).
