@@ -30,6 +30,7 @@ class WorkflowState(TypedDict, total=False):
     assumptions: list[str]
     decisions: Annotated[list[dict], operator.add]
     tasks: list[dict]
+    qa_plan: dict
     architecture: dict
     risks: list[str]
     controls: list[str]
@@ -144,6 +145,21 @@ class WorkflowService:
                     "pending_action": "apply_code",
                     "decisions": [{"kind": "implementation", "summary": proposal.summary}]}
 
+        def qa_planning(state: WorkflowState) -> dict:
+            from .providers import TaskPlan
+
+            task_plan = TaskPlan.model_validate({"tasks": state["tasks"]})
+            plan_output = self.provider.qa_plan(state["normalized_requirement"], task_plan)
+            self._event(state, "qa_plan_generated", "qa_planning", data={
+                "provider": self.provider.name,
+                "case_count": len(plan_output.recommendations),
+                "categories": sorted({case.category for case in plan_output.recommendations}),
+            })
+            return {
+                "qa_plan": plan_output.model_dump(),
+                "decisions": [{"kind": "qa_strategy", "strategy": plan_output.strategy}],
+            }
+
         def code_approval(state: WorkflowState) -> dict:
             answer = interrupt({"action": "apply_code", "artifacts": [a["path"] for a in state["artifacts"]]})
             approved = bool(answer.get("approved")) if isinstance(answer, dict) else bool(answer)
@@ -251,6 +267,7 @@ class WorkflowService:
 
         nodes = {"normalize": normalize, "clarify": clarify, "architecture": architecture,
                  "risks": risks, "plan": plan, "implement": implement,
+                 "qa_planning": qa_planning,
                  "code_approval": code_approval, "apply": apply_code, "tests": run_tests,
                  "policy": policy_check, "docs": docs_check, "review": review,
                  "rollback_approval": rollback_approval, "rollback": rollback,
@@ -263,7 +280,8 @@ class WorkflowService:
         graph.add_edge("clarify", "risks")
         graph.add_edge("architecture", "plan")
         graph.add_edge("risks", "plan")
-        graph.add_edge("plan", "implement")
+        graph.add_edge("plan", "qa_planning")
+        graph.add_edge("qa_planning", "implement")
         graph.add_edge("implement", "code_approval")
         graph.add_conditional_edges("code_approval", approval_route, {"apply": "apply", "stop": "stop"})
         graph.add_edge("apply", "tests")
@@ -291,7 +309,8 @@ class WorkflowService:
         state: WorkflowState = {
             "run_id": run_id, "thread_id": run_id, "scenario": scenario,
             "requirement": requirement[:12000], "requirement_revision": 1,
-            "assumptions": [], "decisions": [], "tasks": [], "risks": [], "controls": [],
+            "assumptions": [], "decisions": [], "tasks": [], "qa_plan": {},
+            "risks": [], "controls": [],
             "artifacts": [], "approvals": [], "attempts": {}, "test_results": [],
             "validation_results": [], "rollback_state": "not_required", "status": "created",
             "pending_action": None, "workspace_path": str(root), "started_at": now_iso(),

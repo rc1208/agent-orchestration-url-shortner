@@ -49,6 +49,20 @@ class ReviewResult(BaseModel):
     rationale: str
 
 
+class TestCaseRecommendation(BaseModel):
+    case_id: str
+    category: Literal["unit", "functional", "security", "failure_path"]
+    title: str
+    requirement_reference: str
+    task_ids: list[str]
+    expected_outcome: str
+
+
+class TestPlan(BaseModel):
+    strategy: str
+    recommendations: list[TestCaseRecommendation]
+
+
 class AgentProvider(ABC):
     name: str
 
@@ -66,6 +80,9 @@ class AgentProvider(ABC):
 
     @abstractmethod
     def implement(self, requirement: str, scenario: str, attempt: int) -> ImplementationProposal: ...
+
+    @abstractmethod
+    def qa_plan(self, requirement: str, task_plan: TaskPlan) -> TestPlan: ...
 
     def review(self, passed: bool, attempt: int, max_retries: int) -> ReviewResult:
         if passed:
@@ -119,6 +136,26 @@ class MockProvider(AgentProvider):
             artifacts=[Artifact(path="solution.py", content=solution), Artifact(path="test_solution.py", content=tests)],
         )
 
+    def qa_plan(self, requirement: str, task_plan: TaskPlan) -> TestPlan:
+        task_ids = [task.task_id for task in task_plan.tasks]
+        titles = {
+            "unit": "Validate domain behavior in isolation",
+            "functional": "Validate the requirement through the public API",
+            "security": "Reject unsafe paths, aliases, and generated output",
+            "failure_path": "Verify bounded retry, rollback, and safe-stop",
+        }
+        return TestPlan(
+            strategy="AI proposes risk-based cases; deterministic tools decide pass or fail.",
+            recommendations=[
+                TestCaseRecommendation(
+                    case_id=f"QA-{index}", category=category, title=title,
+                    requirement_reference=requirement[:200], task_ids=task_ids,
+                    expected_outcome="The governed behavior is observable and deterministic.",
+                )
+                for index, (category, title) in enumerate(titles.items(), start=1)
+            ],
+        )
+
 
 OutputT = TypeVar("OutputT", bound=BaseModel)
 
@@ -160,6 +197,13 @@ class OpenAIProvider(MockProvider):
     def implement(self, requirement: str, scenario: str, attempt: int) -> ImplementationProposal:
         return self._structured(ImplementationProposal, f"Generate Python files for {scenario}: {requirement}")
 
+    def qa_plan(self, requirement: str, task_plan: TaskPlan) -> TestPlan:
+        return self._structured(
+            TestPlan,
+            f"Act as a QA agent. Propose unit, functional, security, and failure-path tests for "
+            f"requirement={requirement}; tasks={task_plan.model_dump_json()}",
+        )
+
 
 class FallbackProvider(AgentProvider):
     """Use the primary provider, falling back deterministically on runtime failures."""
@@ -194,3 +238,6 @@ class FallbackProvider(AgentProvider):
 
     def implement(self, requirement: str, scenario: str, attempt: int) -> ImplementationProposal:
         return self._call("implement", requirement, scenario, attempt)
+
+    def qa_plan(self, requirement: str, task_plan: TaskPlan) -> TestPlan:
+        return self._call("qa_plan", requirement, task_plan)

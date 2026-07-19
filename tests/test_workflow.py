@@ -17,6 +17,9 @@ def test_greenfield_pauses_for_code_and_release_approval(settings: Settings) -> 
     run = service.start("Build a URL shortener with create and redirect APIs", "greenfield")
     assert run["status"] == "awaiting_code_approval"
     assert run["pending_action"] == "apply_code"
+    assert {case["category"] for case in run["qa_plan"]["recommendations"]} == {
+        "unit", "functional", "security", "failure_path"
+    }
 
     run = service.approve(run["run_id"], "apply_code", True, "reviewer")
     assert run["status"] == "awaiting_release_approval"
@@ -84,3 +87,10 @@ def test_provider_failure_uses_deterministic_fallback() -> None:
 
     result = FallbackProvider(BrokenProvider()).plan("Build a URL shortener")
     assert [task.task_id for task in result.tasks] == ["T1", "T2", "T3"]
+
+
+def test_qa_agent_returns_typed_traceable_recommendations() -> None:
+    provider = MockProvider()
+    plan = provider.qa_plan("Build a URL shortener", provider.plan("Build a URL shortener"))
+    assert all(case.requirement_reference for case in plan.recommendations)
+    assert all(case.task_ids for case in plan.recommendations)
