@@ -1,0 +1,44 @@
+name: Governed workflow quality
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
+      - name: Lint
+        run: ruff check .
+      - name: Type check
+        run: mypy agentic_url_shortener
+      - name: Tests and branch coverage
+        run: >-
+          pytest -q --cov=agentic_url_shortener --cov-branch
+          --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=85
+      - name: Deterministic agent evaluations
+        env:
+          AGENTIC_PROVIDER: mock
+        run: agentic-url evaluate --output eval-results.json
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-evidence
+          path: |
+            coverage.xml
+            eval-results.json
+          if-no-files-found: error

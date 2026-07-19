@@ -12,6 +12,7 @@ flowchart LR
   Graph --> Policy["Workspace policy"]
   Graph --> Checkpoints["SQLite checkpoints"]
   Graph --> Audit["Audit events + metrics"]
+  Graph --> Analyzer["Deterministic AST/codebase analyzer"]
   URL --> SQLite["SQLite domain data"]
   Policy --> Sandbox["Per-run sandbox"]
 ```
@@ -25,6 +26,8 @@ approved. The main source tree is never an agent write target.
 ```mermaid
 flowchart TD
   I[Intake] --> A{Ambiguous?}
+  I -->|brownfield| X[Codebase impact evidence]
+  X --> AR
   A -->|yes| C[Clarification interrupt]
   A -->|no| AR[Architecture and risk analysis]
   C --> AR
@@ -62,3 +65,5 @@ and lineage. Audit events additionally record actor and requirement revision.
   restores the true pre-change state.
 - Metrics expose success rate, retries, rollback, safe stops, MTTR placeholder, and p50/p95/p99
   end-to-end latency without high-cardinality labels.
+- The evaluation loop replays curated scenarios and scores observable governance outcomes; it does
+  not use an agent to grade its own prose.

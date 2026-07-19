@@ -14,6 +14,8 @@
 | Explicit QA-agent recommendations | `test_qa_agent_returns_typed_traceable_recommendations` | Unit |
 | JSON logging, context, and secret redaction | `tests/test_logging.py` | Unit |
 | HTTP correlation propagation | `test_api_propagates_correlation_id` | Functional |
+| AST-backed brownfield impact analysis | `tests/test_codebase_analysis.py` and brownfield workflow test | Unit + Functional |
+| Agent governance evaluation | `tests/test_evaluation.py` and `eval-results.json` | Functional |
 
 ## Combined quality gate
 
@@ -21,7 +23,7 @@
 pytest --cov=agentic_url_shortener --cov-branch --cov-report=term-missing --cov-fail-under=85
 ```
 
-The measured combined result is **86%** (18 tests). The enforced threshold is **85%**, one point
+The measured combined result is **87%** (23 tests). The enforced threshold is **85%**, two points
 below the measured baseline to tolerate coverage rounding while preventing material regression.
 Coverage is supporting evidence, not the release decision by itself; deterministic assertions,
 policy gates, type checking, linting, and human approval remain required.

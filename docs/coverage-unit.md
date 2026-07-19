@@ -8,18 +8,18 @@ pytest -m unit --cov=agentic_url_shortener --cov-branch --cov-report=term-missin
 
 | Measure | Result |
 |---|---:|
-| Tests | 5 passed |
-| Statements | 757 |
-| Statements missed | 403 |
-| Branches | 76 |
-| Partial branches | 3 |
-| Total coverage | 43% |
+| Tests | 6 passed |
+| Statements | 921 |
+| Statements missed | 483 |
+| Branches | 108 |
+| Partial branches | 5 |
+| Total coverage | 45% |
 
 The unit slice intentionally isolates formatting, redaction, provider fallback, QA planning, and
 workspace path policy. CLI, database, API, and full graph behavior require process, filesystem,
 or SQLite resources and are classified as functional tests instead of being mocked into unit
-tests. Strong unit results include schemas (100%), configuration (89%), providers (66%), and
-structured logging (63%).
+tests. Strong unit results include codebase analysis (97%), schemas (100%), configuration (89%),
+and structured logging (63%).
 
 Primary uncovered areas are the CLI, persistent workflow execution, URL repository behavior,
 and subprocess validation. Those paths are exercised by the functional suite.

@@ -13,6 +13,7 @@ persistent LangGraph state. Deterministic tools and humans retain final authorit
 | Requirements Agent | Raw requirement and scenario | `RequirementAnalysis` | Normalize and clarify | Ambiguity score, assumptions, revision history, clarification interrupt |
 | Design Agent | Normalized requirement | `ArchitectureProposal`, `RiskAnalysis` | Parallel architecture and security analysis | Explicit fan-in, recorded decisions, policy controls, audit events |
 | Planning Agent | Requirement and design context | `TaskPlan` | Dependency planning | Dependency gate rejects unresolved task references |
+| Codebase Analyzer | Brownfield workspace and requirement | `CodebaseImpactAnalysis` | Pre-design impact analysis | AST-derived modules, symbols, routes, tests, flows, and line evidence |
 | QA Agent | Requirement and task plan | `TestPlan` | QA planning | Cases reference requirements/tasks; recommendations cannot mark validation successful |
 | Development Agent | Requirement, scenario, attempt | `ImplementationProposal` | Implementation proposal | Schema/size/path/secret validation and human apply-code interrupt |
 | Review Agent | Deterministic validation results | `ReviewResult` | Review and release routing | Bounded retry, rollback approval, safe-stop, release approval |
@@ -54,6 +55,8 @@ fall back to mock mode, so a live demonstration is not dependent on network avai
 - Typed output contracts turn probabilistic responses into validated engineering inputs.
 - Deterministic mock mode makes prompts, routing, retries, and approvals regression-testable.
 - Human attention is reserved for high-impact decisions instead of routine analysis and testing.
+- A deterministic evaluation harness checks nine observable orchestration/governance outcomes and
+  fails CI when a regression violates them.
 
 ## Evidence index
 
@@ -61,6 +64,8 @@ fall back to mock mode, so a live demonstration is not dependent on network avai
 - Key decisions: [decisions.md](decisions.md)
 - Unit coverage: [coverage-unit.md](coverage-unit.md)
 - Functional coverage: [coverage-functional.md](coverage-functional.md)
+- Agent evaluation results: [evaluation-report.md](evaluation-report.md)
+- Security analysis: [threat-model.md](threat-model.md)
 - Requirements traceability: [test-traceability.md](test-traceability.md)
 - Interview flow: [demo-runbook.md](demo-runbook.md)
 - Risks and production evolution: [engineering-summary.md](engineering-summary.md)
