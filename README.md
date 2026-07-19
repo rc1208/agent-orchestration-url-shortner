@@ -1,6 +1,6 @@
 # Agentic URL Shortener
 
-A runnable interview prototype that combines a production-shaped URL shortener with a
+A runnable prototype that combines a production-shaped URL shortener with a
 governed, stateful agentic SDLC workflow. The default `mock` provider is deterministic and
 offline; `openai` mode uses structured Responses API outputs.
 
@@ -32,7 +32,7 @@ curl http://127.0.0.1:8000/api/v1/urls/demo-link/analytics
 
 All errors use `{ "error": { "code", "message", "details?" } }`.
 
-## Workflow CLI
+## Agentic Workflow CLI
 
 ```bash
 agentic-url demo greenfield
